@@ -19,9 +19,13 @@ function Badge({ status }) {
 async function ai(key, prompt, search=false) {
   const body = { model:"claude-sonnet-4-20250514", max_tokens:1024, messages:[{role:"user",content:prompt}] };
   if (search) body.tools = [{type:"web_search_20250305",name:"web_search"}];
-  const r = await fetch("https://api.anthropic.com/v1/messages", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body) });
+  const r = await fetch("/api/claude", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-api-key": key },
+    body: JSON.stringify(body),
+  });
   const d = await r.json();
-  if (d.error) throw new Error(d.error.message);
+  if (d.error) throw new Error(d.error.message || JSON.stringify(d.error));
   return d.content?.filter(b=>b.type==="text").map(b=>b.text).join("\n")||"";
 }
 
@@ -46,19 +50,18 @@ export default function App() {
   const [sel, setSel] = useState(null);
   const stop = useRef(false);
 
-  useEffect(()=>{(async()=>{try{
-    const a=await window.storage.get("oe-cfg"); if(a)setCfg(JSON.parse(a.value));
-    const b=await window.storage.get("oe-cos"); if(b)setCos(JSON.parse(b.value));
-    const c=await window.storage.get("oe-wk"); if(c)setWeek(parseInt(c.value));
-    const d=await window.storage.get("oe-hist"); if(d)setHist(JSON.parse(d.value));
-    const e=await window.storage.get("oe-logs"); if(e)setLogs(JSON.parse(e.value));
-  }catch(e){}})()},[]);
+  useEffect(()=>{try{
+    const a=localStorage.getItem("oe-cfg"); if(a)setCfg(JSON.parse(a));
+    const b=localStorage.getItem("oe-cos"); if(b)setCos(JSON.parse(b));
+    const c=localStorage.getItem("oe-wk"); if(c)setWeek(parseInt(c));
+    const d=localStorage.getItem("oe-hist"); if(d)setHist(JSON.parse(d));
+    const e=localStorage.getItem("oe-logs"); if(e)setLogs(JSON.parse(e));
+  }catch(e){}},[]);
 
-  const sv=useCallback(async(k,v)=>{try{await window.storage.set(k,typeof v==="string"?v:JSON.stringify(v))}catch(e){}},[]);
+  const sv=useCallback((k,v)=>{try{localStorage.setItem(k,typeof v==="string"?v:JSON.stringify(v))}catch(e){}},[]);
   const log=useCallback(m=>{setLogs(p=>{const n=[{t:new Date().toLocaleTimeString(),m},...p].slice(0,300);sv("oe-logs",n);return n})},[sv]);
   const upd=useCallback((id,u)=>{setCos(p=>{const n=p.map(c=>c.id===id?{...c,...u}:c);sv("oe-cos",n);return n})},[sv]);
 
-  // DISCOVER
   const discover = useCallback(async()=>{
     if(!cfg.key){alert("Add Claude API key in Settings first");return}
     setBusy(true);stop.current=false;setStep("Discovering companies...");log("🔍 Starting discovery for Week "+week);
@@ -80,7 +83,6 @@ ONLY JSON array, no markdown.`,true);
     setBusy(false);setStep("");
   },[cfg,week,hist,cos,log,sv]);
 
-  // RESEARCH
   const research = useCallback(async(c)=>{
     upd(c.id,{status:"researching"});log(`🔬 Researching ${c.name}...`);
     try{
@@ -90,7 +92,6 @@ ONLY JSON array, no markdown.`,true);
     }catch(e){log(`❌ ${c.name}: ${e.message}`);upd(c.id,{status:"new"})}
   },[cfg,upd,log]);
 
-  // FIND CONTACT
   const findContact = useCallback(async(c)=>{
     log(`👤 Finding contact at ${c.name}...`);
     if(cfg.hunter&&c.website){
@@ -113,7 +114,6 @@ ONLY JSON array, no markdown.`,true);
     log(`⚠️ Fallback contact for ${c.name}`);
   },[cfg,upd,log]);
 
-  // DRAFT EMAIL
   const draft = useCallback(async(c)=>{
     log(`✉️ Drafting for ${c.name}...`);
     const rs=c.research||{};const ct=c.contact||{};
@@ -139,7 +139,6 @@ Return JSON: {"subject":"...","body":"...","followUp":"2-sentence follow-up for 
     }catch(e){log(`❌ Draft failed: ${e.message}`)}
   },[cfg,upd,log]);
 
-  // FULL PIPELINE
   const runAll = useCallback(async()=>{
     if(!cfg.key){alert("Add Claude API key first");return}
     setBusy(true);stop.current=false;
@@ -217,7 +216,6 @@ Return JSON: {"subject":"...","body":"...","followUp":"2-sentence follow-up for 
         .ep{background:#0a0a16;border:1px solid #1a1a30;border-radius:7px;padding:14px;font-size:11.5px;line-height:1.65;white-space:pre-wrap;max-height:260px;overflow-y:auto;color:#a0a0c8}
       `}</style>
 
-      {/* HEADER */}
       <div style={{borderBottom:"1px solid #1a1a30",padding:"14px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",background:"#0b0b16"}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <div style={{width:32,height:32,borderRadius:8,background:"linear-gradient(135deg,#6366f1,#a855f7)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>⚡</div>
@@ -233,7 +231,6 @@ Return JSON: {"subject":"...","body":"...","followUp":"2-sentence follow-up for 
         </div>}
       </div>
 
-      {/* TABS */}
       <div style={{borderBottom:"1px solid #1a1a30",padding:"0 20px",display:"flex",background:"#0b0b16"}}>
         {["dashboard","pipeline","outbox","follow-ups","settings","logs"].map(t=>(
           <button key={t} className={`tb ${tab===t?"on":""}`} onClick={()=>setTab(t)}>
@@ -244,7 +241,6 @@ Return JSON: {"subject":"...","body":"...","followUp":"2-sentence follow-up for 
 
       <div style={{padding:20,maxWidth:1100,margin:"0 auto"}}>
 
-        {/* ========== DASHBOARD ========== */}
         {tab==="dashboard"&&<div style={{display:"flex",flexDirection:"column",gap:16}}>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:10}}>
             {[{l:"Targets",v:st.total,c:"#6366f1"},{l:"Researched",v:st.res,c:"#8b5cf6"},{l:"Contacts",v:st.con,c:"#06b6d4"},{l:"Drafted",v:st.dra,c:"#c084fc"},{l:"Sent",v:st.sent,c:"#22d3ee"},{l:"Follow-ups",v:st.fuDue,c:"#f59e0b"},{l:"Replies",v:st.rep,c:"#10b981"},{l:"Interviews",v:st.int,c:"#f97316"}].map(s=>(
@@ -287,7 +283,6 @@ Return JSON: {"subject":"...","body":"...","followUp":"2-sentence follow-up for 
           </div>}
         </div>}
 
-        {/* ========== PIPELINE ========== */}
         {tab==="pipeline"&&<div style={{display:"flex",flexDirection:"column",gap:6}}>
           <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:15,fontWeight:600,color:"#c0c0ff",marginBottom:6}}>
             Pipeline — {cos.length} companies
@@ -325,7 +320,6 @@ Return JSON: {"subject":"...","body":"...","followUp":"2-sentence follow-up for 
           ))}
         </div>}
 
-        {/* ========== OUTBOX ========== */}
         {tab==="outbox"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
           <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:15,fontWeight:600,color:"#c0c0ff"}}>
             📤 Outbox — {cos.filter(c=>c.status==="drafted").length} ready
@@ -352,7 +346,6 @@ Return JSON: {"subject":"...","body":"...","followUp":"2-sentence follow-up for 
             ))}
         </div>}
 
-        {/* ========== FOLLOW-UPS ========== */}
         {tab==="follow-ups"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
           <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:15,fontWeight:600,color:"#c0c0ff"}}>
             🔔 Follow-ups — {fuList.length} due
@@ -391,7 +384,6 @@ Return JSON: {"subject":"...","body":"...","followUp":"2-sentence follow-up for 
           </>}
         </div>}
 
-        {/* ========== SETTINGS ========== */}
         {tab==="settings"&&<div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:500}}>
           <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:15,fontWeight:600,color:"#c0c0ff"}}>⚙️ Settings</div>
           <div className="cd">
@@ -422,13 +414,12 @@ Return JSON: {"subject":"...","body":"...","followUp":"2-sentence follow-up for 
             </div>
           </div>
           <div className="cd">
-            <button className="bt br" onClick={async()=>{if(confirm("Delete ALL data?")){setCos([]);setHist([]);setLogs([]);setWeek(1);for(const k of["oe-cos","oe-hist","oe-logs","oe-wk","oe-cfg"])await sv(k,k==="oe-wk"?"1":"[]")}}}>
+            <button className="bt br" onClick={()=>{if(confirm("Delete ALL data?")){setCos([]);setHist([]);setLogs([]);setWeek(1);["oe-cos","oe-hist","oe-logs","oe-wk","oe-cfg"].forEach(k=>localStorage.removeItem(k))}}}>
               🗑️ Reset Everything
             </button>
           </div>
         </div>}
 
-        {/* ========== LOGS ========== */}
         {tab==="logs"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:15,fontWeight:600,color:"#c0c0ff"}}>📋 Activity Log</div>
