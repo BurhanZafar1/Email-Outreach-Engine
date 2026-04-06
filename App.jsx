@@ -17,7 +17,7 @@ function Badge({ status }) {
 }
 
 async function ai(key, prompt, search=false) {
-  const body = { model:"claude-sonnet-4-20250514", max_tokens:1024, messages:[{role:"user",content:prompt}] };
+  const body = { model:"claude-haiku-4-5-20251001", max_tokens:1024, messages:[{role:"user",content:prompt}] };
   if (search) body.tools = [{type:"web_search_20250305",name:"web_search"}];
   const r = await fetch("/api/claude", {
     method: "POST",
@@ -145,17 +145,17 @@ Return JSON: {"subject":"...","body":"...","followUp":"2-sentence follow-up for 
     const total=cos.length;
     for(let i=0;i<cos.length&&!stop.current;i++){
       const c=cos[i];setProg({c:i+1,t:total});
-      if(c.status==="new"){setStep(`Research ${c.name} (${i+1}/${total})`);await research(c);await new Promise(r=>setTimeout(r,2000))}
+      if(c.status==="new"){setStep(`Research ${c.name} (${i+1}/${total})`);await research(c);await new Promise(r=>setTimeout(r,15000))}
     }
     let latest;setCos(p=>{latest=p;return p});
     for(let i=0;i<(latest||cos).length&&!stop.current;i++){
       const c=(latest||cos)[i];
-      if(c.status==="researched"){setStep(`Contact at ${c.name}`);await findContact(c);await new Promise(r=>setTimeout(r,1500))}
+      if(c.status==="researched"){setStep(`Contact at ${c.name}`);await findContact(c);await new Promise(r=>setTimeout(r,15000))}
     }
     setCos(p=>{latest=p;return p});
     for(let i=0;i<(latest||cos).length&&!stop.current;i++){
       const c=(latest||cos)[i];
-      if(c.status==="contact_found"){setStep(`Drafting ${c.name}`);await draft(c);await new Promise(r=>setTimeout(r,2000))}
+      if(c.status==="contact_found"){setStep(`Drafting ${c.name}`);await draft(c);await new Promise(r=>setTimeout(r,15000))}
     }
     setBusy(false);setStep("");log("🎉 Pipeline complete!");
   },[cfg,cos,research,findContact,draft,log]);
